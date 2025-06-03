@@ -1,0 +1,255 @@
+# Prometheus Alerting Rules for Holographic Digital Human System
+# Save as: prometheus-alerts.yml
+# Configure in your OpenStack Prometheus: prometheus.openstack.svc.oss-as-central-5.com
+
+groups:
+  - name: holo-bot-livestream
+    rules:
+      # System Health Alerts
+      - alert: HoloBotInstanceDown
+        expr: up{job="holo-bot-livestream"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          service: holo-bot
+        annotations:
+          summary: "Holographic Digital Human instance is down"
+          description: "Instance {{ $labels.instance }} has been down for more than 30 seconds"
+
+      - alert: HoloBotHighMemoryUsage
+        expr: (holo_bot_memory_usage_bytes / holo_bot_memory_total_bytes) * 100 > 90
+        for: 2m
+        labels:
+          severity: warning
+          service: holo-bot
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is {{ $value }}% on instance {{ $labels.instance }}"
+
+      - alert: HoloBotHighCPUUsage
+        expr: holo_bot_cpu_usage_percent > 85
+        for: 5m
+        labels:
+          severity: warning
+          service: holo-bot
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is {{ $value }}% on instance {{ $labels.instance }}"
+
+      # Streaming Performance Alerts
+      - alert: HoloBotLowStreamingFPS
+        expr: holo_bot_streaming_fps < 25
+        for: 1m
+        labels:
+          severity: warning
+          service: holo-bot
+        annotations:
+          summary: "Low streaming FPS detected"
+          description: "Streaming FPS is {{ $value }} on instance {{ $labels.instance }}"
+
+      - alert: HoloBotNoViewers
+        expr: holo_bot_viewers_current == 0 and holo_bot_stream_active == 1
+        for: 10m
+        labels:
+          severity: info
+          service: holo-bot
+        annotations:
+          summary: "No viewers for active stream"
+          description: "Stream is active but has no viewers for 10 minutes on {{ $labels.instance }}"
+
+      - alert: HoloBotHighViewerCount
+        expr: holo_bot_viewers_current > 1000
+        for: 1m
+        labels:
+          severity: info
+          service: holo-bot
+        annotations:
+          summary: "High viewer count detected"
+          description: "Viewer count is {{ $value }} on instance {{ $labels.instance }}"
+
+      # Avatar Performance Alerts
+      - alert: HoloBotHighLipSyncLatency
+        expr: holo_bot_avatar_lip_sync_latency_ms > 100
+        for: 2m
+        labels:
+          severity: warning
+          service: holo-bot
+        annotations:
+          summary: "High lip-sync latency detected"
+          description: "Lip-sync latency is {{ $value }}ms on instance {{ $labels.instance }}"
+
+      - alert: HoloBotHighMotionCaptureLatency
+        expr: holo_bot_avatar_motion_capture_latency_ms > 50
+        for: 2m
+        labels:
+          severity: warning
+          service: holo-bot
+        annotations:
+          summary: "High motion capture latency detected"
+          description: "Motion capture latency is {{ $value }}ms on instance {{ $labels.instance }}"
+
+      # MCP Service Alerts
+      - alert: HoloBotMCPServiceDown
+        expr: holo_bot_mcp_connection_status == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: holo-bot
+        annotations:
+          summary: "MCP service connection lost"
+          description: "MCP service {{ $labels.service }} is disconnected on {{ $labels.instance }}"
+
+      - alert: HoloBotMCPHighLatency
+        expr: holo_bot_mcp_request_duration_ms > 1000
+        for: 3m
+        labels:
+          severity: warning
+          service: holo-bot
+        annotations:
+          summary: "High MCP service latency"
+          description: "MCP service {{ $labels.service }} latency is {{ $value }}ms on {{ $labels.instance }}"
+
+      # Error Rate Alerts
+      - alert: HoloBotHighErrorRate
+        expr: rate(holo_bot_errors_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+          service: holo-bot
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value }} errors/sec on instance {{ $labels.instance }}"
+
+      - alert: HoloBotCriticalErrors
+        expr: increase(holo_bot_errors_total[1m]) > 10
+        for: 0s
+        labels:
+          severity: critical
+          service: holo-bot
+        annotations:
+          summary: "Critical error burst detected"
+          description: "{{ $value }} errors in the last minute on instance {{ $labels.instance }}"
+
+      # Chat System Alerts
+      - alert: HoloBotChatNotResponding
+        expr: increase(holo_bot_chat_messages_sent_total[5m]) == 0 and increase(holo_bot_chat_messages_received_total[5m]) > 0
+        for: 2m
+        labels:
+          severity: warning
+          service: holo-bot
+        annotations:
+          summary: "Chat system not responding"
+          description: "Receiving messages but not sending responses on {{ $labels.instance }}"
+
+      - alert: HoloBotHighChatLatency
+        expr: holo_bot_chat_response_time_ms > 2000
+        for: 3m
+        labels:
+          severity: warning
+          service: holo-bot
+        annotations:
+          summary: "High chat response latency"
+          description: "Chat response time is {{ $value }}ms on instance {{ $labels.instance }}"
+
+      # Business Logic Alerts
+      - alert: HoloBotStreamingRevenueLoss
+        expr: (holo_bot_viewers_current * 0.01) * (holo_bot_stream_duration_seconds / 3600) > 100 and holo_bot_stream_active == 0
+        for: 5m
+        labels:
+          severity: warning
+          service: holo-bot
+        annotations:
+          summary: "Potential revenue loss from stream downtime"
+          description: "Estimated revenue loss: ${{ $value }} on instance {{ $labels.instance }}"
+
+---
+# Prometheus Grafana Dashboard Configuration
+# Import this JSON into your Grafana instance connected to OpenStack Prometheus
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: holo-bot-dashboard
+  namespace: monitoring
+data:
+  dashboard.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "Holographic Digital Human Livestreaming System",
+        "tags": ["holo-bot", "livestreaming", "ai"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "System Overview",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "up{job=\"holo-bot-livestream\"}",
+                "legendFormat": "Instances Up"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 6, "x": 0, "y": 0}
+          },
+          {
+            "id": 2,
+            "title": "Memory Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "(holo_bot_memory_usage_bytes / holo_bot_memory_total_bytes) * 100",
+                "legendFormat": "Memory Usage %"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 6, "x": 6, "y": 0}
+          },
+          {
+            "id": 3,
+            "title": "Streaming Performance",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "holo_bot_streaming_fps",
+                "legendFormat": "FPS"
+              },
+              {
+                "expr": "holo_bot_viewers_current",
+                "legendFormat": "Viewers"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+          },
+          {
+            "id": 4,
+            "title": "Avatar Latency",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "holo_bot_avatar_lip_sync_latency_ms",
+                "legendFormat": "Lip Sync Latency"
+              },
+              {
+                "expr": "holo_bot_avatar_motion_capture_latency_ms",
+                "legendFormat": "Motion Capture Latency"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+          },
+          {
+            "id": 5,
+            "title": "MCP Services Status",
+            "type": "table",
+            "targets": [
+              {
+                "expr": "holo_bot_mcp_connection_status",
+                "legendFormat": "{{service}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+          }
+        ],
+        "time": {"from": "now-1h", "to": "now"},
+        "refresh": "5s"
+      }
+    }

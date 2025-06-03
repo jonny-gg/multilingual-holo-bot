@@ -1,0 +1,168 @@
+version: '3.8'
+
+services:
+  # Main Holographic Digital Human Application
+  holo-bot-app:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PROMETHEUS_ENABLED=true
+      - PROMETHEUS_ENDPOINT=prometheus.openstack.svc.oss-as-central-5.com
+      - PROMETHEUS_PUSHGATEWAY_URL=https://prometheus.openstack.svc.oss-as-central-5.com:9091
+      - PROMETHEUS_PROTOCOL=https
+      - PROMETHEUS_PORT=9090
+      - PROMETHEUS_JOB_NAME=holo-bot-livestream
+      - PROMETHEUS_INSTANCE=holo-bot-prod-${HOSTNAME:-default}
+      - PROMETHEUS_SCRAPE_INTERVAL=15
+      - PROMETHEUS_TIMEOUT=5000
+      - PROMETHEUS_RETRIES=3
+      - METRICS_ENABLED=true
+      - METRICS_RETENTION_HOURS=24
+      - DEMO_MODE=false
+      # Add your production API keys
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - SESSION_SECRET=${SESSION_SECRET}
+      # Production MCP Server URLs
+      - PIAPI_MCP_URL=${PIAPI_MCP_URL:-wss://piapi.production.com}
+      - SCREENPIPE_MCP_URL=${SCREENPIPE_MCP_URL:-wss://screenpipe.production.com}
+      - MEM0_MCP_URL=${MEM0_MCP_URL:-wss://mem0.production.com}
+      - LARA_MCP_URL=${LARA_MCP_URL:-wss://lara.production.com}
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    networks:
+      - holo-bot-network
+      - prometheus-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "prometheus.io/scrape=true"
+      - "prometheus.io/port=3000"
+      - "prometheus.io/path=/api/metrics"
+      - "traefik.enable=true"
+      - "traefik.http.routers.holo-bot.rule=Host(`holo-bot.yourdomain.com`)"
+      - "traefik.http.routers.holo-bot.tls=true"
+      - "traefik.http.routers.holo-bot.tls.certresolver=letsencrypt"
+
+  # PIAPI MCP Server
+  piapi-mcp:
+    image: apinetwork/piapi-mcp-server:latest
+    ports:
+      - "8001:8001"
+    environment:
+      - NODE_ENV=production
+      - PROMETHEUS_PUSHGATEWAY=prometheus.openstack.svc.oss-as-central-5.com:9091
+    networks:
+      - holo-bot-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "8001"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Screenpipe MCP Server  
+  screenpipe-mcp:
+    image: mediar-ai/screenpipe-mcp:latest
+    ports:
+      - "8002:8002"
+    environment:
+      - NODE_ENV=production
+      - PROMETHEUS_PUSHGATEWAY=prometheus.openstack.svc.oss-as-central-5.com:9091
+    networks:
+      - holo-bot-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "8002"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Mem0 MCP Server
+  mem0-mcp:
+    image: mem0ai/mem0-mcp:latest
+    ports:
+      - "8003:8003"
+    environment:
+      - NODE_ENV=production
+      - PROMETHEUS_PUSHGATEWAY=prometheus.openstack.svc.oss-as-central-5.com:9091
+    networks:
+      - holo-bot-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "8003"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Lara MCP Server
+  lara-mcp:
+    image: translated/lara-mcp:latest
+    ports:
+      - "8004:8004"
+    environment:
+      - NODE_ENV=production
+      - PROMETHEUS_PUSHGATEWAY=prometheus.openstack.svc.oss-as-central-5.com:9091
+    networks:
+      - holo-bot-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "8004"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Redis for session storage and caching
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - holo-bot-network
+    restart: unless-stopped
+    command: redis-server --save 60 1 --loglevel warning
+
+  # nginx for load balancing and SSL termination
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+      - ./logs/nginx:/var/log/nginx
+    depends_on:
+      - holo-bot-app
+    networks:
+      - holo-bot-network
+    restart: unless-stopped
+
+networks:
+  holo-bot-network:
+    driver: bridge
+  prometheus-network:
+    external: true
+    name: prometheus_network
+
+volumes:
+  redis-data:
+    driver: local
+  logs:
+    driver: local
+  data:
+    driver: local

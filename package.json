@@ -6,22 +6,47 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "build:prod": "NODE_ENV=production next build",
+    "start:prod": "NODE_ENV=production next start",
+    "docker:build": "docker build -f Dockerfile.prod -t holo-bot:latest .",
+    "docker:run": "docker run -p 3000:3000 --env-file .env.production holo-bot:latest",
+    "deploy:prod": "docker-compose -f docker-compose.prod.yml up -d",
+    "deploy:stop": "docker-compose -f docker-compose.prod.yml down",
+    "health:check": "curl -f http://localhost:3000/api/health || exit 1",
+    "metrics:export": "curl -s http://localhost:3000/api/metrics",
+    "test:prometheus": "curl -k https://prometheus.openstack.svc.oss-as-central-5.com:9090/api/v1/query?query=up",
+    "logs:prod": "docker-compose -f docker-compose.prod.yml logs -f",
+    "clean": "rm -rf .next out dist",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@react-three/drei": "^10.0.8",
+    "@react-three/fiber": "^9.1.2",
+    "@socket.io/component-emitter": "^3.1.2",
+    "@types/three": "^0.176.0",
+    "@types/uuid": "^10.0.0",
+    "@types/ws": "^8.18.1",
+    "axios": "^1.9.0",
+    "framer-motion": "^12.15.0",
+    "lucide-react": "^0.511.0",
+    "next": "15.3.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "next": "15.3.2"
+    "socket.io-client": "^4.8.1",
+    "three": "^0.176.0",
+    "uuid": "^11.1.0",
+    "ws": "^8.18.2"
   },
   "devDependencies": {
-    "typescript": "^5",
+    "@eslint/eslintrc": "^3",
+    "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@tailwindcss/postcss": "^4",
-    "tailwindcss": "^4",
     "eslint": "^9",
     "eslint-config-next": "15.3.2",
-    "@eslint/eslintrc": "^3"
+    "tailwindcss": "^4",
+    "typescript": "^5"
   }
 }
